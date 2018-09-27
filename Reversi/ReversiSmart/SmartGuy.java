@@ -72,176 +72,111 @@ class SmartGuy {
         return myValueAndMove;
     }
 
+    private void updateIfBetterValue(boolean isMaximizer, int[] bestValueAndMove, int expectedValue, int moveNumber) {
+      if (isMaximizer) {
+        if (expectedValue > bestValueAndMove[0]) {
+          bestValueAndMove[0] = expectedValue;
+          bestValueAndMove[1] = moveNumber;
+        }
+      } else { 
+        if (expectedValue < bestValueAndMove[0]) {
+          bestValueAndMove[0] = expectedValue;
+          bestValueAndMove[1] = moveNumber;
+        }
+      }
+    }
+
+    private int[] getExpectedValueFromSubtree(boolean opponentIsMaximizer, int numLevelsLeft) {
+      // Then just evaulate the moves for the opponent and get thier expectedValue
+      int[] opponentMoves = new int[64];
+      int numOpponentMoves = 0;
+
+      //Evaluate moves for opponent, num moves, and decrement levels left
+      for (int i = 0; i < 8; i++) {
+          for (int j = 0; j < 8; j++) {
+              if (state[i][j] == 0) {
+                  if (couldBe(opponentIsMaximizer, state, i, j)) { // Check opponents possible moves
+                      validMoves[numValidMoves] = i*8 + j;
+                      numValidMoves ++;
+                      System.out.println(i + ", " + j);
+                  }
+              }
+          }
+      }
+      
+      return getBestMove(opponentIsMaximizer, numOpponentMoves, opponentMoves, numLevelsLeft - 1);
+    }
+
     // Return int[0] -> the best value, and int[1] -> the best move
     private int[] getBestMove(boolean isMaximizer, int numMovesForPlayer, int[] movesForPlayer, int numLevelsLeft) {
 
+      int bestValueAndMove[] = new int[2];
+
+      // Maximizers return the highest value
+      // Minimizers return the smallest value
+      
+      if (isMaximizer) {
+        bestValueAndMove[0] = Integer.MIN_VALUE;
+      } else {
+        bestValueAndMove[0] = Integer.MAX_VALUE;
+      }
+
+      bestValueAndMove[1] = 0;
+
       // If we want to stop at this level
       if (numLevelsLeft == 1) {
-        if (isMaximizer) {
-
-          int bestValueAndMove[] = new int[2];
-          bestValueAndMove[0] = Integer.MIN_VALUE;
-          bestValueAndMove[1] = 0;
-
           for (int a = 0; a < numMovesForPlayer; ++a) {
             int currentMove = movesForPlayer[a];
             int expectedValue = evaluateMove(isMaximizer, numMovesForPlayer, currentMove);
 
-            if (expectedValue > bestValueAndMove[0]) {
-              bestValueAndMove[0] = expectedValue;
-              bestValueAndMove[1] = a;
-            }
+            updateIfBetterValue(isMaximizer, bestValueAndMove, expectedValue, a);
           }
 
           return bestValueAndMove;
-
-        } else {
-
-          int worstValueAndMove[] = new int[2];
-          worstValueAndMove[0] = Integer.MAX_VALUE;
-          worstValueAndMove[1] = 0;
-
-          for (int a = 0; a < numMovesForPlayer; ++a) {
-            int currentMove = movesForPlayer[a];
-            int expectedValue = evaluateMove(isMaximizer, numMovesForPlayer, currentMove);
-
-            if (expectedValue < worstValueAndMove[0]) {
-              worstValueAndMove[0] = expectedValue;
-              worstValueAndMove[1] = a;
-            }
-          }
-
-          return worstValueAndMove;
-        }
       }
 
       int alpha = 0;
       int beta = 0;
 
-      // If this is a maximizer player (the computer)
-      if (isMaximizer) {
+      // If player cannot make a move
+      if (numMovesForPlayer == 0) {
 
-        int bestValueAndMove[] = new int[2];
-        bestValueAndMove[0] = Integer.MIN_VALUE;
-        bestValueAndMove[1] = 0;
+        // Then this value is worth nothing
+        int currentMoveValue = 0;
+        int[] expectedValueAndMove = getExpectedValueFromSubtree(!isMaximizer, numLevelsLeft);
 
-        // If player cannot make a move
-        if (numMovesForPlayer == 0) {
+        // TODO: What to return on no possible move? 0th move?
+        updateIfBetterValue(isMaximizer, bestValueAndMove, expectedValueAndMove[0] + currentMoveValue, 0);
 
-          // Then this value is worth nothing
-          int currentMoveValue = 0;
-
-          // Then just evaulate the moves for the opponent and get thier expectedValue
-          int[] opponentMoves = new int[64];
-          int numOpponentMoves = 0;
-
-          //Evaluate moves for opponent, num moves, and decrement levels left
-          for (int i = 0; i < 8; i++) {
-              for (int j = 0; j < 8; j++) {
-                  if (state[i][j] == 0) {
-                      if (couldBe(false, state, i, j)) { // Check opponents possible moves
-                          validMoves[numValidMoves] = i*8 + j;
-                          numValidMoves ++;
-                          System.out.println(i + ", " + j);
-                      }
-                  }
-              }
-          }
-
-          int[] expectedValueAndMove = getBestMove(!isMaximizer, numOpponentMoves, opponentMoves, numLevelsLeft - 1);
-
-          if (expectedValueAndMove[0] + currentMoveValue > bestValueAndMove[0]) {
-            bestValueAndMove[0] = expectedValueAndMove[0] + currentMoveValue;
-            bestValueAndMove[1] = 0;
-          }
-
-          // TODO: What to return on no possible move? 0th move?
-          return bestValueAndMove;
+        return bestValueAndMove;
           
-        } else {
-          for (int a = 0; a < numMovesForPlayer; ++a) {
-
-            // Update the game board if this move were to be done
-            int currentMove = movesForPlayer[a];
-            state[currentMove / 8][currentMove % 8] = me;
-
-            int currentMoveValue = evaluateMove(isMaximizer, numMovesForPlayer, currentMove);
-
-            int[] opponentMoves = new int[64];
-            int numOpponentMoves = 0;
-
-            //Evaluate moves for opponent, num moves, and decrement levels left
-            for (int i = 0; i < 8; i++) {
-                for (int j = 0; j < 8; j++) {
-                    if (state[i][j] == 0) {
-                        if (couldBe(false, state, i, j)) { // Check opponents possible moves
-                            opponentMoves[numOpponentMoves] = i*8 + j;
-                            numOpponentMoves ++;
-                            System.out.println(i + ", " + j);
-                        }
-                    }
-                }
-            }
-
-            int[] expectedValueAndMove = getBestMove(!isMaximizer, numOpponentMoves, opponentMoves, numLevelsLeft - 1);
-
-            if (expectedValueAndMove[0] + currentMoveValue > bestValueAndMove[0]) {
-              bestValueAndMove[0] = expectedValueAndMove[0] + currentMoveValue;
-              bestValueAndMove[1] = a;
-            }
-          
-            // Remove the move that would be done down this path
-            state[currentMove / 8][currentMove % 8] = 0;
-
-          }
-
-          return bestValueAndMove;
-        }
-      } else { // If this is a minimizer player (the human player)
-        
-        int worstValueAndMove[] = new int[2];
-        worstValueAndMove[0] = Integer.MAX_VALUE;
-        worstValueAndMove[1] = 0;
-
+      } else {
         for (int a = 0; a < numMovesForPlayer; ++a) {
+
           int currentMove = movesForPlayer[a];
 
-          if (me == 1) {
-            state[currentMove / 8][currentMove % 8] = 2;
+          // Update the game board if this move were to be done
+          if (isMaximizer) {
+            state[currentMove / 8][currentMove % 8] = me;
           } else {
-            state[currentMove / 8][currentMove % 8] = 1;
+            if (me == 1) {
+              state[currentMove / 8][currentMove % 8] = 2;
+            } else {
+              state[currentMove / 8][currentMove % 8] = 1;
+            }
           }
 
           int currentMoveValue = evaluateMove(isMaximizer, numMovesForPlayer, currentMove);
+          int[] expectedValueAndMove = getExpectedValueFromSubtree(!isMaximizer, numLevelsLeft);
 
-          int[] computerMoves = new int[64];
-          int numComputerMoves = 0;
-
-          //Evaluate moves for opponent, num moves, and decrement levels left
-          for (int i = 0; i < 8; i++) {
-              for (int j = 0; j < 8; j++) {
-                  if (state[i][j] == 0) {
-                      if (couldBe(true, state, i, j)) { // Check computer's next possible moves
-                          computerMoves[numComputerMoves] = i*8 + j;
-                          numComputerMoves ++;
-                          System.out.println(i + ", " + j);
-                      }
-                  }
-              }
-          }
-
-          int[] expectedValueAndMove = getBestMove(!isMaximizer, numComputerMoves, computerMoves, numLevelsLeft - 1);
-
-          if (expectedValueAndMove[0] + currentMoveValue < worstValueAndMove[0]) {
-            worstValueAndMove[0] = expectedValueAndMove[0] + currentMoveValue;
-            worstValueAndMove[1] = a;
-          }
-
+          updateIfBetterValue(isMaximizer, bestValueAndMove, expectedValueAndMove[0] + currentMoveValue, a);
+            
           // Remove the move that would be done down this path
           state[currentMove / 8][currentMove % 8] = 0;
+
         }
 
-        return worstValueAndMove;
+        return bestValueAndMove;
       }
     }
 
