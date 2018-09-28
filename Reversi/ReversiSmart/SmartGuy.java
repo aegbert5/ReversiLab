@@ -50,7 +50,7 @@ class SmartGuy {
                 
                 String sel = validMoves[myMove] / 8 + "\n" + validMoves[myMove] % 8;
                 
-                System.out.println("Selection: " + validMoves[myMove] / 8 + ", " + validMoves[myMove] % 8 + " -> " + value);
+                System.out.println("Selection: (" + validMoves[myMove] / 8 + ", " + validMoves[myMove] % 8 + ") -> " + value);
                 
                 sout.println(sel);
             }
@@ -67,26 +67,33 @@ class SmartGuy {
     // Note that "state" is a global variable 2D list that shows the state of the game
     private int[] move() {
         // just move randomly for now
-        int[] myValueAndMove = getBestMove(true, numValidMoves, validMoves, 1);
+        int[] myValueAndMove = getBestMove(true, numValidMoves, validMoves, Integer.MIN_VALUE, Integer.MAX_VALUE, 6);
 
         return myValueAndMove;
     }
 
-    private void updateIfBetterValue(boolean isMaximizer, int[] bestValueAndMove, int expectedValue, int moveNumber) {
+    private void updateIfBetterValue(boolean isMaximizer, int[] bestMoveResponse, int expectedValue, int moveNumber) {
       if (isMaximizer) {
-        if (expectedValue > bestValueAndMove[0]) {
-          bestValueAndMove[0] = expectedValue;
-          bestValueAndMove[1] = moveNumber;
+        if (expectedValue > bestMoveResponse[0]) {
+          bestMoveResponse[0] = expectedValue;
+          bestMoveResponse[1] = moveNumber;
+
+          // Update alpha for maximizer
+          bestMoveResponse[2] = expectedValue;
         }
       } else { 
-        if (expectedValue < bestValueAndMove[0]) {
-          bestValueAndMove[0] = expectedValue;
-          bestValueAndMove[1] = moveNumber;
+        if (expectedValue < bestMoveResponse[0]) {
+          bestMoveResponse[0] = expectedValue;
+          bestMoveResponse[1] = moveNumber;
+
+          // Update beta for minimizer
+          bestMoveResponse[3] = expectedValue;
         }
       }
     }
 
-    private int[] getExpectedValueFromSubtree(boolean opponentIsMaximizer, int numLevelsLeft) {
+    private int[] getExpectedValueFromSubtree(boolean opponentIsMaximizer, int alphaValue, int betaValue, int numLevelsLeft) {
+
       // Then just evaulate the moves for the opponent and get thier expectedValue
       int[] opponentMoves = new int[64];
       int numOpponentMoves = 0;
@@ -96,62 +103,89 @@ class SmartGuy {
           for (int j = 0; j < 8; j++) {
               if (state[i][j] == 0) {
                   if (couldBe(opponentIsMaximizer, state, i, j)) { // Check opponents possible moves
-                      validMoves[numValidMoves] = i*8 + j;
-                      numValidMoves ++;
-                      System.out.println(i + ", " + j);
+                      opponentMoves[numOpponentMoves] = i*8 + j;
+                      numOpponentMoves ++;
+                      //System.out.println(i + ", " + j);
                   }
               }
           }
       }
       
-      return getBestMove(opponentIsMaximizer, numOpponentMoves, opponentMoves, numLevelsLeft - 1);
+      int[] expectedMoveResponse = getBestMove(opponentIsMaximizer, numOpponentMoves, opponentMoves, alphaValue, betaValue, numLevelsLeft - 1);
+      
+      return expectedMoveResponse;
     }
 
-    // Return int[0] -> the best value, and int[1] -> the best move
-    private int[] getBestMove(boolean isMaximizer, int numMovesForPlayer, int[] movesForPlayer, int numLevelsLeft) {
+    // Return int[0] -> the best value, and int[1] -> the best move, int[2] -> alphaValue, int[3] -> betaValue
+    private int[] getBestMove(boolean isMaximizer, int numMovesForPlayer, int[] movesForPlayer, int previousAlpha, int previousBeta, int numLevelsLeft) {
 
-      int bestValueAndMove[] = new int[2];
+      int bestMoveResponse[] = new int[4];
 
       // Maximizers return the highest value
       // Minimizers return the smallest value
       
       if (isMaximizer) {
-        bestValueAndMove[0] = Integer.MIN_VALUE;
+        bestMoveResponse[0] = Integer.MIN_VALUE;
       } else {
-        bestValueAndMove[0] = Integer.MAX_VALUE;
+        bestMoveResponse[0] = Integer.MAX_VALUE;
       }
 
-      bestValueAndMove[1] = 0;
+      bestMoveResponse[1] = 0;
+      bestMoveResponse[2] = previousAlpha;
+      bestMoveResponse[3] = previousBeta;
 
       // If we want to stop at this level
       if (numLevelsLeft == 1) {
           for (int a = 0; a < numMovesForPlayer; ++a) {
+
+            // Alpha-beta pruning before entering possible choices
+            if (bestMoveResponse[2] >= bestMoveResponse[3]) {
+               return bestMoveResponse;
+            }
+
             int currentMove = movesForPlayer[a];
             int expectedValue = evaluateMove(isMaximizer, numMovesForPlayer, currentMove);
 
-            updateIfBetterValue(isMaximizer, bestValueAndMove, expectedValue, a);
+            updateIfBetterValue(isMaximizer, bestMoveResponse, expectedValue, a);
           }
 
-          return bestValueAndMove;
-      }
+          System.out.println("BASE(" + isMaximizer + "): " + bestMoveResponse[0]);
 
-      int alpha = 0;
-      int beta = 0;
+          return bestMoveResponse;
+      }
 
       // If player cannot make a move
       if (numMovesForPlayer == 0) {
+        
+        // Alpha-beta pruning before entering possible choices
+        if (bestMoveResponse[2] >= bestMoveResponse[3]) {
+           return bestMoveResponse;
+        }
 
         // Then this value is worth nothing
         int currentMoveValue = 0;
-        int[] expectedValueAndMove = getExpectedValueFromSubtree(!isMaximizer, numLevelsLeft);
+
+        if (isMaximizer) {
+          currentMoveValue = -100;
+        } else {
+          currentMoveValue = 100;
+        }
+
+        int[] expectedMoveResponse = getExpectedValueFromSubtree(!isMaximizer, bestMoveResponse[2], bestMoveResponse[3], numLevelsLeft);
 
         // TODO: What to return on no possible move? 0th move?
-        updateIfBetterValue(isMaximizer, bestValueAndMove, expectedValueAndMove[0] + currentMoveValue, 0);
+        updateIfBetterValue(isMaximizer, bestMoveResponse, expectedMoveResponse[0] + currentMoveValue, 0);
 
-        return bestValueAndMove;
+          System.out.println("LEVEL(" + isMaximizer + ") -> " + numLevelsLeft + ": " + bestMoveResponse[0]);
+        return bestMoveResponse;
           
       } else {
         for (int a = 0; a < numMovesForPlayer; ++a) {
+          
+          // Alpha-beta pruning
+          if (bestMoveResponse[2] >= bestMoveResponse[3]) {
+            return bestMoveResponse;
+          }
 
           int currentMove = movesForPlayer[a];
 
@@ -167,16 +201,18 @@ class SmartGuy {
           }
 
           int currentMoveValue = evaluateMove(isMaximizer, numMovesForPlayer, currentMove);
-          int[] expectedValueAndMove = getExpectedValueFromSubtree(!isMaximizer, numLevelsLeft);
+          int[] expectedMoveResponse = getExpectedValueFromSubtree(!isMaximizer, bestMoveResponse[2], bestMoveResponse[3], numLevelsLeft);
 
-          updateIfBetterValue(isMaximizer, bestValueAndMove, expectedValueAndMove[0] + currentMoveValue, a);
+          updateIfBetterValue(isMaximizer, bestMoveResponse, expectedMoveResponse[0] + currentMoveValue, a);
             
           // Remove the move that would be done down this path
           state[currentMove / 8][currentMove % 8] = 0;
 
         }
 
-        return bestValueAndMove;
+          
+        System.out.println("LEVEL(" + isMaximizer + ") -> " + numLevelsLeft + ": " + bestMoveResponse[0]);
+        return bestMoveResponse;
       }
     }
 
@@ -188,18 +224,18 @@ class SmartGuy {
       // Corners are the best
       if (desiredMove == 0 || desiredMove == 7 || desiredMove == 56 || desiredMove == 63) {
         if (isMaximizer) {
-          return 10;
+          return 100;
         } else {
-          return -10;
+          return -100;
         }
       }
 
       //Edges are great value
       if (row == 0 || row == 7 || column == 0 || column == 7) {
         if (isMaximizer) {
-          return 8;
+          return 10;
         } else {
-          return -8;
+          return -10;
         }
       }
 
