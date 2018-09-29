@@ -31,6 +31,8 @@ class RandomGuy {
         me = _me;
         initClient(host);
 
+System.out.println("RANDOM GUY IS PLAYING");
+
         int myMove;
         
         while (true) {

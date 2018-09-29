@@ -34,12 +34,18 @@ class SmartGuy {
         int[] myValueAndMove = new int[2];
 
         System.out.println("SMARRRRRRTTTTTYYYYYY I S PLAYING");
+    try {    
+       FileWriter writer = new FileWriter("output.txt", false);
         
         while (true) {
             System.out.println("Read");
             readMessage();
             
+            
             if (turn == me) {
+
+                long startMillis = System.currentTimeMillis();
+
                 System.out.println("Move");
                 getValidMoves(round, state);
                 
@@ -49,17 +55,25 @@ class SmartGuy {
                 //myMove = generator.nextInt(numValidMoves);        // select a move randomly
                 
                 String sel = validMoves[myMove] / 8 + "\n" + validMoves[myMove] % 8;
+
+                long endMillis = System.currentTimeMillis();
+
+                writer.append((endMillis - startMillis) + ", ");
                 
-                System.out.println("Selection: (" + validMoves[myMove] / 8 + ", " + validMoves[myMove] % 8 + ") -> " + value);
+                System.out.println("Selection took " + (endMillis - startMillis) + " milliseconds: (" + validMoves[myMove] / 8 + ", " + validMoves[myMove] % 8 + ") -> " + value);
                 
                 sout.println(sel);
             }
-        }
         //while (turn == me) {
         //    System.out.println("My turn");
             
             //readMessage();
         //}
+   writer.flush();
+    }
+         } catch (IOException e) {
+           System.out.println("Failed to open output.txt file");
+         }
     }
     
     // You should modify this function
@@ -67,7 +81,7 @@ class SmartGuy {
     // Note that "state" is a global variable 2D list that shows the state of the game
     private int[] move() {
         // just move randomly for now
-        int[] myValueAndMove = getBestMove(true, numValidMoves, validMoves, Integer.MIN_VALUE, Integer.MAX_VALUE, 6);
+        int[] myValueAndMove = getBestMove(true, numValidMoves, validMoves, Integer.MIN_VALUE, Integer.MAX_VALUE, 9);
 
         return myValueAndMove;
     }
@@ -102,7 +116,7 @@ class SmartGuy {
       for (int i = 0; i < 8; i++) {
           for (int j = 0; j < 8; j++) {
               if (state[i][j] == 0) {
-                  if (couldBe(opponentIsMaximizer, state, i, j)) { // Check opponents possible moves
+                  if (couldBe(opponentIsMaximizer, state, i, j) > 0) { // Check opponents possible moves
                       opponentMoves[numOpponentMoves] = i*8 + j;
                       numOpponentMoves ++;
                       //System.out.println(i + ", " + j);
@@ -144,12 +158,12 @@ class SmartGuy {
             }
 
             int currentMove = movesForPlayer[a];
-            int expectedValue = evaluateMove(isMaximizer, numMovesForPlayer, currentMove);
+            int expectedValue = evaluateMove(isMaximizer, state, numMovesForPlayer, currentMove);
 
             updateIfBetterValue(isMaximizer, bestMoveResponse, expectedValue, a);
           }
 
-          System.out.println("BASE(" + isMaximizer + "): " + bestMoveResponse[0]);
+          //System.out.println("BASE(" + isMaximizer + "): " + bestMoveResponse[0]);
 
           return bestMoveResponse;
       }
@@ -166,7 +180,7 @@ class SmartGuy {
         int currentMoveValue = 0;
 
         if (isMaximizer) {
-          currentMoveValue = -100;
+          currentMoveValue = -300;
         } else {
           currentMoveValue = 100;
         }
@@ -176,7 +190,7 @@ class SmartGuy {
         // TODO: What to return on no possible move? 0th move?
         updateIfBetterValue(isMaximizer, bestMoveResponse, expectedMoveResponse[0] + currentMoveValue, 0);
 
-          System.out.println("LEVEL(" + isMaximizer + ") -> " + numLevelsLeft + ": " + bestMoveResponse[0]);
+          //System.out.println("LEVEL(" + isMaximizer + ") -> " + numLevelsLeft + ": " + bestMoveResponse[0]);
         return bestMoveResponse;
           
       } else {
@@ -188,6 +202,7 @@ class SmartGuy {
           }
 
           int currentMove = movesForPlayer[a];
+          int currentMoveValue = evaluateMove(isMaximizer, state, numMovesForPlayer, currentMove);
 
           // Update the game board if this move were to be done
           if (isMaximizer) {
@@ -200,7 +215,6 @@ class SmartGuy {
             }
           }
 
-          int currentMoveValue = evaluateMove(isMaximizer, numMovesForPlayer, currentMove);
           int[] expectedMoveResponse = getExpectedValueFromSubtree(!isMaximizer, bestMoveResponse[2], bestMoveResponse[3], numLevelsLeft);
 
           updateIfBetterValue(isMaximizer, bestMoveResponse, expectedMoveResponse[0] + currentMoveValue, a);
@@ -211,36 +225,61 @@ class SmartGuy {
         }
 
           
-        System.out.println("LEVEL(" + isMaximizer + ") -> " + numLevelsLeft + ": " + bestMoveResponse[0]);
+        //System.out.println("LEVEL(" + isMaximizer + ") -> " + numLevelsLeft + ": " + bestMoveResponse[0]);
         return bestMoveResponse;
       }
     }
 
-    private int evaluateMove(boolean isMaximizer, int numMovesForPlayer, int desiredMove) {
+    private int evaluateMove(boolean isMaximizer, int[][] state, int numMovesForPlayer, int desiredMove) {
 
       int row = desiredMove / 8;
       int column = desiredMove % 8;
 
+      int totalUtility = 0;
+
       // Corners are the best
       if (desiredMove == 0 || desiredMove == 7 || desiredMove == 56 || desiredMove == 63) {
         if (isMaximizer) {
-          return 100;
+          totalUtility += 300;
         } else {
-          return -100;
+          totalUtility -= 400;
         }
       }
 
       //Edges are great value
       if (row == 0 || row == 7 || column == 0 || column == 7) {
         if (isMaximizer) {
-          return 10;
+          totalUtility += 50;
+          // If exactly one neighboring peice is there, that is bad
+          if (hasOneSideNeighbor(isMaximizer, state, row, column)) {
+            totalUtility -= 200;
+          }
         } else {
-          return -10;
+          totalUtility -= 10;
+          if (hasOneSideNeighbor(isMaximizer, state, row, column)) {
+            totalUtility += 200;
+          }
         }
       }
 
-      // If none of these positions are the next move, yield 1
-      return 0;
+      //Avoid the spaces right next to the side
+      if (row == 1 || row == 6 || column == 1 || column == 6) {
+        if (isMaximizer) {
+          totalUtility -= 70;
+        } else {
+          totalUtility += 70;
+        }
+      }
+
+      // The more peices captured the better
+      int totalCaptured = couldBe(isMaximizer, state, row, column);
+      if (isMaximizer) {
+        totalUtility += totalCaptured;
+      } else {
+        totalCaptured -= totalCaptured;
+      }
+
+      return totalUtility;
     }
     
     // generates the set of valid moves for the player; returns a list of valid moves (validMoves)
@@ -275,7 +314,7 @@ class SmartGuy {
             for (i = 0; i < 8; i++) {
                 for (j = 0; j < 8; j++) {
                     if (state[i][j] == 0) {
-                        if (couldBe(true, state, i, j)) {
+                        if (couldBe(true, state, i, j) > 0) {
                             validMoves[numValidMoves] = i*8 + j;
                             numValidMoves ++;
                             System.out.println(i + ", " + j);
@@ -292,7 +331,7 @@ class SmartGuy {
         //}
     }
     
-    private boolean checkDirection(boolean checkMyMoves, int state[][], int row, int col, int incx, int incy) {
+    private int checkDirection(boolean checkMyMoves, int state[][], int row, int col, int incx, int incy) {
         int sequence[] = new int[7];
         int seqLen;
         int i, r, c;
@@ -319,7 +358,7 @@ class SmartGuy {
                       count ++;
                   else {
                       if ((sequence[i] == 1) && (count > 0))
-                          return true;
+                          return count;
                       break;
                   }
               }
@@ -328,13 +367,13 @@ class SmartGuy {
                       count ++;
                   else {
                       if ((sequence[i] == 2) && (count > 0))
-                          return true;
+                          return count;
                       break;
                   }
               }
          }
         
-          return false;
+          return 0;
         } else { // Checking the opponents possible moves
           for (i = 0; i < seqLen; i++) {
               if (me == 1) {
@@ -342,7 +381,7 @@ class SmartGuy {
                       count ++;
                   else {
                       if ((sequence[i] == 2) && (count > 0))
-                          return true;
+                          return count;
                       break;
                   }
               }
@@ -351,30 +390,133 @@ class SmartGuy {
                       count ++;
                   else {
                       if ((sequence[i] == 1) && (count > 0))
-                          return true;
+                          return count;
                       break;
                   }
               }
          }
 
-         return false;
+         return 0;
         }
     }
+
+    private boolean hasOneSideNeighbor(boolean checkMyMoves, int state[][], int row, int col) {
+      if (row == 0 || row == 7) {
+
+        int left;
+        if (col - 1 < 0) {
+          left = 0;
+        } else {
+          left = state[row][col-1];
+        }
+
+        int right;
+        if (col + 1 > 7) {
+          right = 0;
+        } else {
+          right = state[row][col+1];
+        }
+
+        if (checkMyMoves) {
+          if (me == 1) {
+            if (left == 2 ^ right == 2) {
+              return true;
+            } else {
+              return false;
+            }
+          } else {
+            if (left == 1 ^ right == 1) {
+              return true;
+            } else {
+              return false;
+            }
+          }
+        } else {
+          if (me == 1) {
+            if (left == 1 ^ right == 1) {
+              return true;
+            } else {
+              return false;
+            }
+          } else {
+            if (left == 2 ^ right == 2) {
+              return true;
+            } else {
+              return false;
+            }
+          }
+        }
+      }
+
+      if (col == 0 || col == 7) {
+        
+        int up;
+        if (row - 1 < 0) {
+          up = 0;
+        } else {
+          up = state[row-1][col];
+        }
+
+        int down;
+        if (row + 1 > 7) {
+          down = 0;
+        } else {
+          down = state[row+1][col];
+        }
+
+        if (checkMyMoves) {
+          if (me == 1) {
+            if (up == 2 ^ down == 2) {
+              return true;
+            } else {
+              return false;
+            }
+          } else {
+            if (up == 1 ^ down == 1) {
+              return true;
+            } else {
+              return false;
+            }
+          }
+        } else {
+          if (me == 1) {
+            if (up == 1 ^ down == 1) {
+              return true;
+            } else {
+              return false;
+            }
+          } else {
+            if (up == 2 ^ down == 2) {
+              return true;
+            } else {
+              return false;
+            }
+          }
+        }
+      }
+
+      return false;
+    }
     
-    private boolean couldBe(boolean checkMyMoves, int state[][], int row, int col) {
+    private int couldBe(boolean checkMyMoves, int state[][], int row, int col) {
         int incx, incy;
+
+        int totalCaptured = 0;
         
         for (incx = -1; incx < 2; incx++) {
             for (incy = -1; incy < 2; incy++) {
                 if ((incx == 0) && (incy == 0))
                     continue;
+
+                totalCaptured += checkDirection(checkMyMoves, state, row, col, incx, incy);
             
-                if (checkDirection(checkMyMoves, state, row, col, incx, incy))
-                    return true;
+                //if (checkDirection(checkMyMoves, state, row, col, incx, incy))
+                //    return true;
             }
         }
         
-        return false;
+        return totalCaptured;
+        //return false;
     }
     
     public void readMessage() {
